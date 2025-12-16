@@ -1,0 +1,86 @@
+<!-- 고급웹프로그래밍 기말프로젝트 이성은 60212770 -->
+<!-- 회원 정보 수정 페이지: views/profile.ejs-->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/frontUser.css" />
+</head>
+<body>
+  <header><%- include('./header', { session: session }); %></header>
+
+  <h2>회원 정보 수정</h2>
+
+  <form method="post" action="/user/profile">
+    <p>
+      <label>아이디</label>
+      <!-- 로그인 아이디는 변경 불가, 보여주기만 -->
+      <input type="text" value="<%= user.loginId %>" disabled />
+    </p>
+
+    <p>
+      <label>비밀번호</label>
+      <input
+        type="password"
+        name="password"
+        placeholder="변경할 비밀번호 (변경하지 않으려면 비워두세요)"
+      />
+    </p>
+
+    <p>
+      <label>나이</label>
+      <input
+        type="number"
+        name="age"
+        min="0"
+        value="<%= user.age || '' %>"
+      />
+    </p>
+
+    <p>
+      <label>성별</label>
+      <label>
+        <input
+          type="radio"
+          name="gender"
+          value="M"
+          <%= user.gender === 'M' ? 'checked' : '' %>
+        /> 남
+      </label>
+      <label>
+        <input
+          type="radio"
+          name="gender"
+          value="F"
+          <%= user.gender === 'F' ? 'checked' : '' %>
+        /> 여
+      </label>
+    </p>
+
+    <p>
+      <label>체중(kg)</label>
+      <input
+        type="number"
+        name="weight"
+        step="0.1"
+        value="<%= user.weight || '' %>"
+      />
+    </p>
+
+    <p>
+      <label>신장(cm)</label>
+      <input
+        type="number"
+        name="height"
+        step="0.1"
+        value="<%= user.height || '' %>"
+      />
+    </p>
+
+    <button type="submit">정보 수정</button>
+  </form>
+
+  <footer><%- include('./footer'); %></footer>
+</body>
+</html>

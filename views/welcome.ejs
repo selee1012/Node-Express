@@ -1,0 +1,26 @@
+<!-- 고급웹프로그래밍 기말프로젝트 이성은 60212770 -->
+<!-- 로그인 직후 환영합니다 출력 -->
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/frontUser.css" />
+</head>
+<body>
+  <header><%- include('./header', { session: session }); %></header>
+
+  <h2>환영합니다!</h2>
+  <p><strong><%= session.user %></strong> 님, 로그인에 성공하셨습니다.</p>
+
+  <ul>
+    <li><a href="/health">운동 기록하러 가기</a></li>
+    <li><a href="/food">식단 등록하러 가기</a></li>
+    <li><a href="/user/profile">회원 정보 수정하기</a></li>
+  </ul>
+
+  <footer><%- include('./footer'); %></footer>
+</body>
+</html>
+

@@ -1,0 +1,16 @@
+<!-- 고급웹프로그래밍 기말프로젝트 이성은 60212770 -->
+<nav style="display: flex; gap: 20px; align-items: center;">
+  <% if (!session || !session.user) { %>
+    <!-- 로그인 X -->
+    <a href="/">로그인</a>
+    <a href="/register">회원가입</a>
+  <% } else { %>
+    <!-- 로그인 O -->
+    <span><%= session.user %>님 환영합니다!</span>
+    <a href="/health">운동 기록</a>
+    <a href="/food">식단 등록</a>
+    <a href="/user/profile">회원 정보</a>
+    <a href="/logout">로그아웃</a>
+  <% } %>
+</nav>
+<hr/>

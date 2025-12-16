@@ -1,0 +1,648 @@
+<!-- 고급웹프로그래밍 기말프로젝트 이성은 60212770 -->
+<!-- views/health.ejs -->
+<!-- 운동 기록 페이지 + 운동 버튼 선택 + 칼로리 계산 -->
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/frontUser.css" />
+</head>
+<body>
+  <header><%- include('./header', { session: session }); %></header>
+
+  <h2>운동 기록</h2>
+
+  <!-- 🔹 오늘의 칼로리 현황 -->
+  <section id="calorieSection" style="border:1px solid #aaa; padding:10px; margin-bottom:15px;">
+    <h3>오늘의 칼로리 현황</h3>
+    <p id="calorieMessage">계산 중입니다...</p>
+    <ul id="calorieDetail" style="display:none; list-style:none; padding-left:0;">
+      <li>기초대사량 (BMR): <span id="bmrSpan"></span> kcal/일</li>
+      <li>기초대사 기준 현재까지 소모 칼로리: <span id="baseBurnedSpan"></span> kcal</li>
+      <li>운동으로 추가 소모 칼로리: <span id="exerciseBurnedSpan"></span> kcal</li>
+      <li>총 소모 칼로리: <span id="burnedSpan"></span> kcal</li>
+      <li>오늘 섭취 칼로리 (식단 기준): <span id="intakeSpan"></span> kcal</li>
+      <li>순 소모 칼로리 (소모 - 섭취): <span id="netSpan"></span> kcal</li>
+    </ul>
+    <button type="button" id="calorieRefreshBtn">다시 계산</button>
+    <p style="font-size: 0.9em; color: #555; margin-top:5px;">
+      * 회원 정보의 나이·성별·체중·신장을 기반으로 기초대사량을 계산하고,<br/>
+      * 선택한 운동의 METs와 운동 시간으로 추가 소모 칼로리를 계산합니다.
+    </p>
+  </section>
+
+  <!-- 🔹 운동 기록 등록 -->
+  <form method="post" action="/health">
+    <fieldset style="margin-bottom:10px;">
+      <legend>운동 선택</legend>
+      <p style="margin-bottom:5px;">운동 버튼 중 하나를 선택한 뒤, 시간 선택 후 "추가" 버튼으로 여러 운동을 넣을 수 있습니다.</p>
+
+      <!-- 운동 선택용 버튼들 -->
+      <div id="exerciseButtonGroup" style="display:flex; flex-wrap:wrap; gap:8px;">
+        <% if (exercises && exercises.length > 0) { %>
+          <% exercises.forEach(ex => { %>
+            <button
+              type="button"
+              class="exerciseBtn"
+              data-id="<%= ex.id %>"
+              data-name="<%= ex.exercise_name %>"
+              style="padding:6px 10px; border-radius:4px; border:1px solid #999; background:#f6f6f6; cursor:pointer;"
+            >
+              <%= ex.exercise_name %>
+            </button>
+          <% }) %>
+        <% } else { %>
+          <span>등록된 운동이 없습니다. (Exercise 테이블을 먼저 채워주세요.)</span>
+        <% } %>
+      </div>
+
+      <!-- 현재 선택된 운동 정보를 저장 -->
+      <input type="hidden" id="exerciseIdInput" />
+      <input type="hidden" id="exerciseTypeInput" />
+      <p id="selectedExerciseText" style="margin-top:8px; color:#444;">
+        선택된 운동: 없음
+      </p>
+
+      <!-- 현재 선택된 운동 + 시간으로 리스트에 추가 -->
+      <div style="margin-top:8px;">
+        <label>운동 시간 선택</label>
+        <select id="durationSelectForAdd" style="margin-left:6px;">
+          <option value="">시간 선택</option>
+          <option value="30분 이하">30분 이하</option>
+          <option value="30분 ~ 1시간">30분 ~ 1시간</option>
+          <option value="1시간 ~ 1시간 30분">1시간 ~ 1시간 30분</option>
+          <option value="1시간 30분 이상">1시간 30분 이상</option>
+        </select>
+        <button type="button" id="addExerciseItemBtn" style="margin-left:6px;">
+          현재 운동 추가
+        </button>
+      </div>
+
+      <!-- 실제로 등록될 여러 운동 리스트 -->
+      <div style="margin-top:10px;">
+        <p style="margin-bottom:4px;">이번 기록에 포함될 운동 목록</p>
+        <ul id="selectedExerciseList" style="list-style:none; padding-left:0; margin:0;"></ul>
+        <p style="font-size:0.85em; color:#666; margin-top:4px;">
+          * 아무 것도 추가하지 않으면, "현재 선택된 운동 + 아래에서 고른 시간" 1개만 등록됩니다.
+        </p>
+      </div>
+    </fieldset>
+
+    <p>
+      <label>세부 사항</label>
+      <input
+        type="text"
+        name="details"
+        placeholder="운동 부위, 세트 수 등 (선택)"
+        style="width:60%;"
+      />
+    </p>
+
+    <!-- 이 select 는 '단일 운동만 넣을 때' 백업용 -->
+    <p>
+      <label>운동 시간 (단일 등록용 백업)</label>
+      <select name="duration" id="singleDurationSelect">
+        <option value="">시간 선택</option>
+        <option value="30분 이하">30분 이하</option>
+        <option value="30분 ~ 1시간">30분 ~ 1시간</option>
+        <option value="1시간 ~ 1시간 30분">1시간 ~ 1시간 30분</option>
+        <option value="1시간 30분 이상">1시간 30분 이상</option>
+      </select>
+    </p>
+
+    <button type="submit">운동 기록 등록</button>
+  </form>
+
+  <hr />
+
+  <h3>내 운동 기록 목록</h3>
+
+  <div id="healthList">
+    <% if (records && records.length > 0) { %>
+      <% records.forEach(r => { %>
+        <div
+          data-id="<%= r.id %>"
+          data-exercise-type="<%= r.exercise_type %>"
+          data-duration="<%= r.duration || '' %>"
+          data-details="<%= r.details || '' %>"
+          style="border: 1px solid #ccc; margin: 10px 0; padding: 10px;"
+        >
+          <!-- 이 기록에 연결된 운동 목록을 JSON 으로 보관 -->
+          <input
+            type="hidden"
+            class="exerciseItemsData"
+            value='<%- JSON.stringify(r.exerciseItems || []) %>'
+          />
+
+          <p>[<%= r.date %>] <strong><%= r.exercise_type %></strong></p>
+          <p>세부 사항: <%= r.details || '-' %></p>
+          <p>운동 시간: <%= r.duration || '-' %></p>
+
+          <% if (r.exerciseItems && r.exerciseItems.length > 0) { %>
+            <p>운동별 소모 칼로리:</p>
+            <ul style="margin-top:0;">
+              <% r.exerciseItems.forEach(item => { %>
+                <li>
+                  <%= item.name || '운동' %> -
+                  <%= item.minutes %>분,
+                  약 <%= Math.round(item.calorie || 0) %> kcal 소모
+                </li>
+              <% }) %>
+            </ul>
+            <p><strong>해당 기록의 총 운동 소모 칼로리: <%= Math.round(r.totalExerciseCalorie || 0) %> kcal</strong></p>
+          <% } %>
+
+          <!-- 운동 기록 수정/삭제 버튼 -->
+          <button type="button" class="editBtn">수정</button>
+          <button type="button" class="deleteBtn">삭제</button>
+
+          <hr />
+
+          <!-- 댓글 목록 -->
+          <h4>댓글</h4>
+          <% if (r.comments && r.comments.length > 0) { %>
+            <% r.comments.forEach(c => { %>
+              <p
+                data-comment-id="<%= c.id %>"
+                data-health-id="<%= r.id %>"
+                style="margin: 4px 0;"
+              >
+                - [<%= c.date %>]
+                <strong><%= c.user %></strong> :
+                <span class="commentText"><%= c.comment %></span>
+                <!-- 댓글 수정/삭제 버튼 -->
+                <button type="button" class="commentEditBtn" style="margin-left: 8px;">댓글 수정</button>
+                <button type="button" class="commentDeleteBtn">댓글 삭제</button>
+              </p>
+            <% }) %>
+          <% } else { %>
+            <p>댓글이 없습니다.</p>
+          <% } %>
+
+          <!-- 댓글 입력 폼 -->
+          <form method="post" action="/health/<%= r.id %>/comments">
+            <input type="text" name="comment" placeholder="댓글을 입력하세요" style="width:70%;" required />
+            <button type="submit">댓글 작성</button>
+          </form>
+        </div>
+      <% }) %>
+    <% } else { %>
+      <p>등록된 운동 기록이 없습니다.</p>
+    <% } %>
+  </div>
+
+  <script>
+    // ===== 운동 버튼 선택 처리 =====
+    const exerciseButtons = document.querySelectorAll('.exerciseBtn');
+    const exerciseIdInput = document.getElementById('exerciseIdInput');
+    const exerciseTypeInput = document.getElementById('exerciseTypeInput');
+    const selectedText = document.getElementById('selectedExerciseText');
+
+    exerciseButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        // 모든 버튼 스타일 초기화
+        exerciseButtons.forEach(b => {
+          b.style.backgroundColor = '#f6f6f6';
+          b.style.color = '#000';
+        });
+
+        // 선택된 버튼 강조
+        btn.style.backgroundColor = '#007bff';
+        btn.style.color = '#fff';
+
+        // hidden + 표시 텍스트 갱신
+        exerciseIdInput.value = btn.dataset.id;
+        exerciseTypeInput.value = btn.dataset.name;
+        selectedText.textContent = '선택된 운동: ' + btn.dataset.name;
+      });
+    });
+
+    // ===== 등록 폼에서 여러 운동 추가/삭제 처리 =====
+    const addExerciseItemBtn   = document.getElementById('addExerciseItemBtn');
+    const durationSelectForAdd = document.getElementById('durationSelectForAdd');
+    const selectedExerciseList = document.getElementById('selectedExerciseList');
+    const singleDurationSelect = document.getElementById('singleDurationSelect');
+    const healthForm           = document.querySelector('form[action="/health"]');
+
+    // li 1개 생성 + hidden input 두 개(배열용) 생성
+    function createExerciseLi(exId, exName, durLabel) {
+      const li = document.createElement('li');
+      li.style.marginBottom = '4px';
+      li.dataset.exerciseId = exId;
+      li.dataset.duration   = durLabel;
+      li.textContent        = exName + ' - ' + durLabel;
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type  = 'button';
+      removeBtn.textContent = '삭제';
+      removeBtn.style.marginLeft = '8px';
+      removeBtn.addEventListener('click', () => {
+        li.remove();
+      });
+
+      const exInput = document.createElement('input');
+      exInput.type  = 'hidden';
+      exInput.name  = 'exerciseIds';
+      exInput.value = exId;
+
+      const durInput = document.createElement('input');
+      durInput.type  = 'hidden';
+      durInput.name  = 'durations';
+      durInput.value = durLabel;
+
+      li.appendChild(removeBtn);
+      li.appendChild(exInput);
+      li.appendChild(durInput);
+
+      return li;
+    }
+
+    if (addExerciseItemBtn && durationSelectForAdd && selectedExerciseList && healthForm) {
+      // 현재 선택된 운동 + 시간 → 목록에 추가
+      addExerciseItemBtn.addEventListener('click', () => {
+        const exId    = exerciseIdInput.value;
+        const exName  = exerciseTypeInput.value;
+        const durLabel = durationSelectForAdd.value;
+
+        if (!exId) {
+          alert('먼저 운동 버튼을 선택해주세요.');
+          return;
+        }
+        if (!durLabel) {
+          alert('운동 시간을 선택해주세요.');
+          return;
+        }
+
+        const li = createExerciseLi(exId, exName, durLabel);
+        selectedExerciseList.appendChild(li);
+
+        // 추가 후 시간 선택 초기화
+        durationSelectForAdd.value = '';
+      });
+
+      // 폼 submit 시, 여러운동/단일운동에 맞게 hidden 필드 정리
+      healthForm.addEventListener('submit', (e) => {
+        const hasMultiItems = selectedExerciseList.querySelector('li') !== null;
+
+        if (hasMultiItems) {
+          // 여러 운동 모드: 단일용 duration 은 서버에 보내지 않도록 name 제거
+          if (singleDurationSelect) {
+            singleDurationSelect.name = '';
+          }
+        } else {
+          // 여러운동을 하나도 추가 안 했으면: 단일 운동 1개라도 있어야 함
+          const exId    = exerciseIdInput.value;
+          const exName  = exerciseTypeInput.value;
+          const durLabel = singleDurationSelect ? singleDurationSelect.value : '';
+
+          if (!exId || !durLabel) {
+            alert('운동과 시간을 선택해주세요.');
+            e.preventDefault();
+            return;
+          }
+
+          const li = createExerciseLi(exId, exName, durLabel);
+          selectedExerciseList.appendChild(li);
+          // 단일 모드에서도 duration 필드는 굳이 서버로 안 보내도 되므로 name 제거
+          if (singleDurationSelect) {
+            singleDurationSelect.name = '';
+          }
+        }
+      });
+    }
+
+    // ===== 오늘 칼로리 정보 가져오기 =====
+    async function fetchCalorie() {
+      const msgEl    = document.getElementById('calorieMessage');
+      const detailEl = document.getElementById('calorieDetail');
+
+      try {
+        const res = await fetch('/health/calorie');
+        if (!res.ok) throw new Error('response not ok');
+        const data = await res.json();
+
+        if (!data.bmr) {
+          msgEl.textContent = data.message || '회원 정보(나이, 성별, 체중, 신장)를 먼저 입력해주세요.';
+          detailEl.style.display = 'none';
+          return;
+        }
+
+        msgEl.textContent = `오늘 날짜 (${data.date}) 기준 칼로리 정보입니다.`;
+        detailEl.style.display = 'block';
+
+        document.getElementById('bmrSpan').textContent            = data.bmr;
+        document.getElementById('baseBurnedSpan').textContent     = data.baseBurned;
+        document.getElementById('exerciseBurnedSpan').textContent = data.exerciseBurned;
+        document.getElementById('burnedSpan').textContent         = data.burned;
+        document.getElementById('intakeSpan').textContent         = data.intake;
+        document.getElementById('netSpan').textContent            = data.net;
+      } catch (err) {
+        console.error(err);
+        msgEl.textContent = '칼로리 정보를 가져오지 못했습니다.';
+        detailEl.style.display = 'none';
+      }
+    }
+
+    const calorieRefreshBtn = document.getElementById('calorieRefreshBtn');
+    if (calorieRefreshBtn) {
+      calorieRefreshBtn.addEventListener('click', fetchCalorie);
+      fetchCalorie();
+      setInterval(fetchCalorie, 10 * 60 * 1000);
+    }
+
+    // ===== 유틸: 분 → duration 레이블 =====
+    function minutesToDurationLabel(minutes) {
+      const m = Number(minutes) || 0;
+      if (m <= 30) return '30분 이하';
+      if (m <= 60) return '30분 ~ 1시간';
+      if (m <= 90) return '1시간 ~ 1시간 30분';
+      return '1시간 30분 이상';
+    }
+
+    // 등록 폼의 duration select (옵션 재사용)
+    const baseDurationSelect = document.getElementById('singleDurationSelect');
+
+    // 운동 버튼 목록 → 수정 모달에서 운동 select 옵션으로 사용
+    const exerciseList = Array.from(document.querySelectorAll('.exerciseBtn')).map(btn => ({
+      id: btn.dataset.id,
+      name: btn.dataset.name,
+    }));
+
+    // ===== 운동 기록 수정 (여러 운동) =====
+    document.querySelectorAll('#healthList .editBtn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const div = btn.closest('div[data-id]');
+        const id = div.dataset.id;
+        const currentDetails = div.dataset.details || '';
+
+        // 기존 exerciseItems JSON 파싱
+        let exerciseItems = [];
+        const hiddenInput = div.querySelector('.exerciseItemsData');
+        if (hiddenInput && hiddenInput.value) {
+          try {
+            exerciseItems = JSON.parse(hiddenInput.value);
+          } catch (err) {
+            console.error('exerciseItems JSON parse error', err);
+          }
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = `
+          <div class="edit-health-modal-overlay"
+               style="
+                 position: fixed;
+                 inset: 0;
+                 background: rgba(0,0,0,0.4);
+                 display: flex;
+                 align-items: center;
+                 justify-content: center;
+                 z-index: 9999;
+               ">
+            <div class="edit-health-modal"
+                 style="
+                   background: #fff;
+                   padding: 16px;
+                   border-radius: 8px;
+                   width: 90%;
+                   max-width: 380px;
+                   box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                   font-size: 14px;
+                 ">
+              <h3 style="margin-top: 0; margin-bottom: 12px;">운동 기록 수정</h3>
+
+              <div style="margin-bottom: 8px;">
+                <label style="display:block; margin-bottom:4px;">운동 선택</label>
+                <select class="edit-exercise-select" style="width:100%; padding:4px 8px;"></select>
+              </div>
+
+              <div style="margin-bottom: 8px;">
+                <label style="display:block; margin-bottom:4px;">운동 시간</label>
+                <select class="edit-duration-select" style="width:100%; padding:4px 8px;"></select>
+              </div>
+
+              <div style="margin-bottom: 8px;">
+                <button type="button" class="edit-add-btn" style="padding:4px 8px;">현재 선택 운동 추가</button>
+              </div>
+
+              <div style="margin-bottom: 8px;">
+                <p style="margin:4px 0;">이 기록에 포함될 운동 목록</p>
+                <ul class="edit-selected-exercise-list" style="list-style:none; padding-left:0; margin:0;"></ul>
+              </div>
+
+              <div style="margin-bottom: 12px;">
+                <label style="display:block; margin-bottom:4px;">세부 사항</label>
+                <textarea class="edit-details-textarea"
+                          rows="3"
+                          style="width:100%; padding:4px 8px; resize: vertical;"></textarea>
+              </div>
+
+              <div style="text-align: right;">
+                <button type="button" class="cancelEditBtn"
+                        style="margin-right: 8px;">취소</button>
+                <button type="button" class="saveEditBtn">저장</button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        document.body.appendChild(wrapper);
+
+        const overlay         = wrapper.querySelector('.edit-health-modal-overlay');
+        const modal           = wrapper.querySelector('.edit-health-modal');
+        const exerciseSelect  = modal.querySelector('.edit-exercise-select');
+        const durationSelect  = modal.querySelector('.edit-duration-select');
+        const listEl          = modal.querySelector('.edit-selected-exercise-list');
+        const detailsTextarea = modal.querySelector('.edit-details-textarea');
+        const addBtn          = modal.querySelector('.edit-add-btn');
+        const saveBtn         = modal.querySelector('.saveEditBtn');
+        const cancelBtn       = modal.querySelector('.cancelEditBtn');
+
+        // 운동 select 옵션 채우기
+        let exerciseOptionsHtml = '<option value="">운동 선택</option>';
+        if (exerciseList.length > 0) {
+          exerciseList.forEach(ex => {
+            exerciseOptionsHtml += `<option value="${ex.id}">${ex.name}</option>`;
+          });
+        }
+        exerciseSelect.innerHTML = exerciseOptionsHtml;
+
+        // duration select 옵션 채우기 (등록 폼의 것을 복사)
+        if (baseDurationSelect) {
+          durationSelect.innerHTML = baseDurationSelect.innerHTML;
+        } else {
+          durationSelect.innerHTML = `
+            <option value="">시간 선택</option>
+            <option value="30분 이하">30분 이하</option>
+            <option value="30분 ~ 1시간">30분 ~ 1시간</option>
+            <option value="1시간 ~ 1시간 30분">1시간 ~ 1시간 30분</option>
+            <option value="1시간 30분 이상">1시간 30분 이상</option>
+          `;
+        }
+
+        // 수정용 li 생성 헬퍼
+        function createEditExerciseLi(exName, exId, durLabel) {
+          const li = document.createElement('li');
+          li.style.marginBottom = '4px';
+          li.dataset.exerciseId = exId;
+          li.dataset.duration   = durLabel;
+          li.textContent        = exName + ' - ' + durLabel;
+
+          const removeBtn = document.createElement('button');
+          removeBtn.type  = 'button';
+          removeBtn.textContent = '삭제';
+          removeBtn.style.marginLeft = '8px';
+          removeBtn.addEventListener('click', () => {
+            li.remove();
+          });
+
+          li.appendChild(removeBtn);
+          return li;
+        }
+
+        // 기존 exerciseItems 를 리스트에 채우기
+        if (Array.isArray(exerciseItems) && exerciseItems.length > 0) {
+          exerciseItems.forEach(item => {
+            if (!item.exerciseId) return;
+            const label = minutesToDurationLabel(item.minutes);
+            if (!label) return;
+            const found = exerciseList.find(ex => String(ex.id) === String(item.exerciseId));
+            const name = found ? found.name : (item.name || '운동');
+            const li = createEditExerciseLi(name, item.exerciseId, label);
+            listEl.appendChild(li);
+          });
+        }
+
+        // 세부사항 세팅
+        detailsTextarea.value = currentDetails || '';
+
+        // 모달 안에서 "현재 선택 운동 추가"
+        addBtn.addEventListener('click', () => {
+          const exId    = exerciseSelect.value;
+          const durLabel = durationSelect.value;
+          if (!exId || !durLabel) {
+            alert('운동과 시간을 선택해주세요.');
+            return;
+          }
+          const found = exerciseList.find(ex => String(ex.id) === String(exId));
+          const name = found ? found.name : '운동';
+          const li = createEditExerciseLi(name, exId, durLabel);
+          listEl.appendChild(li);
+        });
+
+        // 저장 버튼
+        saveBtn.addEventListener('click', async () => {
+          const liNodes = listEl.querySelectorAll('li[data-exercise-id]');
+          const exerciseIds = [];
+          const durations   = [];
+
+          liNodes.forEach(li => {
+            exerciseIds.push(li.dataset.exerciseId);
+            durations.push(li.dataset.duration);
+          });
+
+          if (exerciseIds.length === 0) {
+            alert('운동을 한 개 이상 추가해주세요.');
+            return;
+          }
+
+          const details = detailsTextarea.value;
+
+          try {
+            await fetch(`/health/${id}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ exerciseIds, durations, details }),
+            });
+            wrapper.remove();
+            location.reload();
+          } catch (err) {
+            console.error(err);
+            alert('수정 중 오류가 발생했습니다.');
+          }
+        });
+
+        // 취소 버튼
+        cancelBtn.addEventListener('click', () => {
+          wrapper.remove();
+        });
+
+        // 오버레이 바깥 클릭 시 닫기
+        overlay.addEventListener('click', (evt) => {
+          if (evt.target === overlay) {
+            wrapper.remove();
+          }
+        });
+      });
+    });
+
+    // ===== 운동 기록 삭제 버튼 =====
+    document.querySelectorAll('.deleteBtn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const div = e.target.closest('div[data-id]');
+        const id  = div.dataset.id;
+
+        if (!confirm('정말 삭제하시겠습니까?')) return;
+
+        try {
+          await fetch(`/health/${id}`, {
+            method: 'DELETE',
+          });
+          location.reload();
+        } catch (err) {
+          console.error(err);
+          alert('삭제 중 오류가 발생했습니다.');
+        }
+      });
+    });
+
+    // ===== 댓글 수정 버튼 =====
+    document.querySelectorAll('.commentEditBtn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const p         = e.target.closest('p[data-comment-id]');
+        const commentId = p.dataset.commentId;
+        const healthId  = p.dataset.healthId;
+        const span      = p.querySelector('.commentText');
+        const oldText   = span.textContent;
+
+        const newComment = prompt('댓글을 수정하세요.', oldText);
+        if (!newComment || newComment.trim() === '' || newComment === oldText) return;
+
+        try {
+          await fetch(`/health/${healthId}/comments/${commentId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ comment: newComment }),
+          });
+          location.reload();
+        } catch (err) {
+          console.error(err);
+          alert('댓글 수정 중 오류가 발생했습니다.');
+        }
+      });
+    });
+
+    // ===== 댓글 삭제 버튼 =====
+    document.querySelectorAll('.commentDeleteBtn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const p         = e.target.closest('p[data-comment-id]');
+        const commentId = p.dataset.commentId;
+        const healthId  = p.dataset.healthId;
+
+        if (!confirm('해당 댓글을 삭제하시겠습니까?')) return;
+
+        try {
+          await fetch(`/health/${healthId}/comments/${commentId}`, {
+            method: 'DELETE',
+          });
+          location.reload();
+        } catch (err) {
+          console.error(err);
+          alert('댓글 삭제 중 오류가 발생했습니다.');
+        }
+      });
+    });
+  </script>
+</body>
+</html>

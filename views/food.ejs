@@ -1,0 +1,228 @@
+<!-- views/food.ejs -->
+<!-- 고급웹프로그래밍 기말프로젝트 이성은 60212770 -->
+<!-- 식단 등록 페이지 -->
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/frontUser.css" />
+</head>
+<body>
+  <header><%- include('./header', { session: session }); %></header>
+
+  <h2>식단 등록</h2>
+
+  <form method="post" enctype="multipart/form-data" action="/food">
+    <label>식사 종류</label>
+    <select name="meal_type">
+      <option value="아침">아침</option>
+      <option value="점심">점심</option>
+      <option value="저녁">저녁</option>
+      <option value="간식">간식</option>
+    </select>
+    <br />
+
+    <label>식단 이름 (선택)</label>
+    <input type="text" name="food_name" placeholder="예: 샐러드, 치킨 등" />
+    <br />
+
+    <label>칼로리 (kcal)</label>
+    <input
+      type="number"
+      name="calorie"
+      step="1"
+      min="0"
+      placeholder="예: 500"
+      required
+    />
+    <br />
+
+    <label>섭취 날짜</label>
+    <input type="date" name="date" />
+    <br />
+
+    <label>식단 이미지 (여러 장 선택 가능)</label>
+    <input type="file" name="images" multiple />
+
+    <button type="submit">등록</button>
+  </form>
+
+  <!-- 🔹 오늘 섭취 칼로리 표시 -->
+  <h3>오늘 섭취 칼로리</h3>
+  <p>
+    <strong><%= todayCalorie || 0 %></strong> kcal
+  </p>
+
+  <h3>등록된 식단 목록</h3>
+  <div id="foodList">
+    <% foods.forEach(f => { %>
+      <div
+        data-id="<%= f.id %>"
+        data-meal-type="<%= f.meal_type %>"
+        data-calorie="<%= f.calorie %>"
+        data-date="<%= f.date %>"
+        style="border: 1px solid #ccc; margin: 10px; padding: 10px;"
+      >
+        <p>[<%= f.date %>] <strong><%= f.meal_type %></strong></p>
+
+        <p>칼로리: <strong><%= f.calorie %></strong> kcal</p>
+
+        <!-- 여러 장 표시 -->
+        <% if (f.imagePaths && f.imagePaths.length > 0) { %>
+          <% f.imagePaths.forEach(img => { %>
+            <img src="<%= img %>" width="150" style="margin-right: 8px;" />
+          <% }) %>
+        <% } %>
+
+        <br/><br/>
+        <button class="editBtn">수정</button>
+        <button class="deleteBtn">삭제</button>
+      </div>
+    <% }) %>
+  </div>
+
+  <footer><%- include('./footer'); %></footer>
+
+  <script>
+  // ===== 식단 수정 버튼 (식사 종류: 선택, 칼로리: 입력) =====
+  document.querySelectorAll('#foodList .editBtn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const div = e.target.closest('div[data-id]');
+      const id = div.dataset.id;
+
+      const currentMealType = div.dataset.mealType || '아침';
+      const currentCalorie  = div.dataset.calorie || '0';
+
+      // 모달 생성
+      const wrapper = document.createElement('div');
+      wrapper.innerHTML = `
+        <div class="edit-food-modal-overlay"
+             style="
+               position: fixed;
+               inset: 0;
+               background: rgba(0,0,0,0.4);
+               display: flex;
+               align-items: center;
+               justify-content: center;
+               z-index: 9999;
+             ">
+          <div class="edit-food-modal"
+               style="
+                 background: #fff;
+                 padding: 16px;
+                 border-radius: 8px;
+                 width: 90%;
+                 max-width: 360px;
+                 box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                 font-size: 14px;
+               ">
+            <h3 style="margin-top: 0; margin-bottom: 12px;">식단 수정</h3>
+
+            <div style="margin-bottom: 8px;">
+              <label style="display:block; margin-bottom:4px;">식사 종류</label>
+              <select class="edit-meal-type" style="width:100%; padding:4px 8px;">
+                <option value="아침">아침</option>
+                <option value="점심">점심</option>
+                <option value="저녁">저녁</option>
+                <option value="간식">간식</option>
+              </select>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+              <label style="display:block; margin-bottom:4px;">칼로리 (kcal)</label>
+              <input
+                type="number"
+                class="edit-calorie-input"
+                min="0"
+                step="1"
+                style="width:100%; padding:4px 8px;"
+              />
+            </div>
+
+            <div style="text-align: right;">
+              <button type="button" class="cancelEditBtn"
+                      style="margin-right: 8px;">취소</button>
+              <button type="button" class="saveEditBtn">저장</button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(wrapper);
+
+      const overlay      = wrapper.querySelector('.edit-food-modal-overlay');
+      const modal        = wrapper.querySelector('.edit-food-modal');
+      const mealSelect   = modal.querySelector('.edit-meal-type');
+      const calorieInput = modal.querySelector('.edit-calorie-input');
+
+      // 현재 값 세팅
+      Array.from(mealSelect.options).forEach(opt => {
+        if (opt.value === currentMealType || opt.textContent.trim() === currentMealType.trim()) {
+          opt.selected = true;
+        }
+      });
+      calorieInput.value = currentCalorie;
+
+      // 취소
+      modal.querySelector('.cancelEditBtn').addEventListener('click', () => {
+        wrapper.remove();
+      });
+
+      // 저장
+      modal.querySelector('.saveEditBtn').addEventListener('click', async () => {
+        const meal_type = mealSelect.value;
+        const newCalorie = calorieInput.value;
+
+        if (!meal_type) {
+          alert('식사 종류를 선택해주세요.');
+          return;
+        }
+        if (newCalorie === '' || Number(newCalorie) < 0) {
+          alert('칼로리를 0 이상으로 입력해주세요.');
+          return;
+        }
+
+        await fetch(`/food/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            meal_type,
+            calorie: newCalorie
+          })
+        });
+
+        wrapper.remove();
+        // 서버에서 재계산하고 있으므로 새로고침하면
+        // 오늘 섭취 칼로리 + 목록 칼로리가 자동으로 갱신됨
+        location.reload();
+      });
+
+      // 오버레이 클릭 시 모달 닫기
+      overlay.addEventListener('click', (evt) => {
+        if (evt.target === overlay) {
+          wrapper.remove();
+        }
+      });
+    });
+  });
+
+  // ===== 식단 삭제 버튼 =====
+  document.querySelectorAll('#foodList .deleteBtn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const div = e.target.closest('div[data-id]');
+      const id = div.dataset.id;
+
+      if (!confirm('정말 삭제하시겠습니까?')) return;
+
+      await fetch(`/food/${id}`, { method: 'DELETE' });
+
+      // 삭제 시에도 서버 쪽에서 오늘 칼로리 재계산 수행 중이므로,
+      // 새로고침하면 food 페이지 "오늘 섭취 칼로리" + health 칼로리 둘 다 반영됨
+      location.reload();
+    });
+  });
+  </script>
+</body>
+</html>
